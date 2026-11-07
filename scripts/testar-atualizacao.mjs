@@ -103,7 +103,7 @@ try {
   const initial = await connect();
   const { page } = initial;
   assert.equal((await page.evaluate(() => window.giulia.updates.getState())).version, from);
-  await page.locator('[data-world="ocean"]').click();
+  await page.locator('button[data-world="ocean"]').click();
   console.log(`Aplicativo ${from} aberto. Aguardando a verificação automática da publicação ${to}.`);
   await page.waitForFunction(async expected => {
     const state = await window.giulia.updates.getState();
@@ -127,7 +127,7 @@ try {
   assert.ok(runningPath.endsWith(`/giulia-updates-v1/${to}.asar/dist/index.html`), runningPath);
   const state = await replacement.page.evaluate(() => window.giulia.updates.getState());
   assert.equal(state.version, to, 'o código da atualização está em execução');
-  assert.equal(await replacement.page.locator('[data-world="ocean"]').getAttribute('aria-pressed'), 'true', 'o mundo escolhido foi preservado');
+  assert.equal(await replacement.page.locator('button[data-world="ocean"]').getAttribute('aria-pressed'), 'true', 'o mundo escolhido foi preservado');
   await playKey();
   await replacement.page.locator('.creation-key').filter({ hasText: /^A$/ }).first().waitFor();
   const saved = JSON.parse(await readFile(join(profile, 'giulia-updates-v1', 'state.json'), 'utf8'));

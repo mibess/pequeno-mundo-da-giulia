@@ -94,7 +94,20 @@ jobs:
           for file in "${assets[@]}"; do test -s "$file"; done
           state="$(gh release view "$tag" --json isDraft --jq '.isDraft' 2>/dev/null || true)"
           if [[ -z "$state" ]]; then
-            gh release create "$tag" --verify-tag --draft --title "Pequeno Mundo da Giulia $version" --generate-notes
+            base="https://github.com/$GITHUB_REPOSITORY/releases/download/$tag"
+            cat > "$RUNNER_TEMP/baixar.md" <<EOF
+          Já tem a versão 1.1.0 ou posterior? Segure **Área dos pais** por dois segundos e clique em **Atualizar agora** quando o aviso aparecer.
+
+          | Para instalar | Download |
+          | --- | --- |
+          | Mac com chip Apple | [Baixar para Mac Apple Silicon]($base/Giulia-mac-arm64-$version.zip) |
+          | Mac com Intel | [Baixar para Mac Intel]($base/Giulia-mac-x64-$version.zip) |
+          | Windows com Intel ou AMD | [Baixar para Windows x64]($base/Giulia-win-x64-$version.zip) |
+          | Windows com processador ARM | [Baixar para Windows ARM64]($base/Giulia-win-arm64-$version.zip) |
+
+          Extraia o ZIP inteiro e abra **Pequeno Mundo da Giulia**. Para ver a atualização acontecer pela primeira vez, comece pela [versão de teste 1.1.0](https://github.com/$GITHUB_REPOSITORY/releases/tag/v1.1.0).
+          EOF
+            gh release create "$tag" --verify-tag --draft --title "Pequeno Mundo da Giulia $version" --notes-file "$RUNNER_TEMP/baixar.md"
           fi
           if [[ "$state" != false ]]; then
             gh release upload "$tag" "${assets[@]}" --clobber
