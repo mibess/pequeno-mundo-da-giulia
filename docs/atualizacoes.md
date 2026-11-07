@@ -4,6 +4,8 @@ No aplicativo para Mac ou Windows a partir da versão **1.1.0**, a consulta de n
 
 Quem tem uma versão anterior a 1.1.0 precisa baixar o ZIP atual uma vez para receber o atualizador. Os pacotes completos para os quatro tipos de computador ficam na [publicação mais recente](https://github.com/mibess/pequeno-mundo-da-giulia/releases/latest).
 
+Uma publicação recém-criada pode levar alguns minutos para aparecer no endereço de atualização do GitHub. Se o app ainda mostrar a versão anterior como atual, aguarde um pouco e clique em **Verificar atualização** na Área dos pais.
+
 ## Publicar uma versão
 
 Faça as alterações no projeto e reserve o número da versão antes de preparar os arquivos. Os comandos abaixo usam o terminal do Mac com Node.js 24.14.1.

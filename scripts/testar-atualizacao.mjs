@@ -105,20 +105,30 @@ try {
   assert.equal((await page.evaluate(() => window.giulia.updates.getState())).version, from);
   await page.locator('button[data-world="ocean"]').click();
   console.log(`Aplicativo ${from} aberto. Aguardando a verificação automática da publicação ${to}.`);
-  await page.waitForFunction(async expected => {
-    const state = await window.giulia.updates.getState();
-    return state.status === 'available' && state.latest === expected;
-  }, to, { timeout: 75_000, polling: 500 }).catch(async error => {
-    console.error('Estado da verificação automática:', await page.evaluate(() => window.giulia.updates.getState()));
-    throw error;
-  });
+  const until = Date.now() + 75_000;
+  let observed;
+  while (Date.now() < until) {
+    observed = await page.evaluate(() => window.giulia.updates.getState());
+    if (observed.status === 'available' && observed.latest === to) break;
+    await delay(500);
+  }
+  assert.equal(observed?.status, 'available', JSON.stringify(observed));
+  assert.equal(observed.latest, to);
 
   await page.locator('#parents').hover();
   await page.mouse.down();
   await page.locator('#parent-dialog[open]').waitFor();
   await page.mouse.up();
   console.log('Atualização anunciada. Instalando pela Área dos pais.');
-  await page.getByRole('button', { name: 'Atualizar agora', exact: true }).click();
+  await page.getByRole('button', { name: 'Atualizar agora', exact: true }).click().catch(async error => {
+    console.error('Área dos pais ao tentar instalar:', await page.evaluate(async () => ({
+      aberto: document.querySelector('#parent-dialog').open,
+      versao: await window.giulia.updates.getState(),
+      mensagem: document.querySelector('#update-status').textContent,
+      botao: document.querySelector('#update-action').textContent,
+    })));
+    throw error;
+  });
 
   const oldPID = latestPID;
   const replacement = await connect(initial.websocket);
