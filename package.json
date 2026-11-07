@@ -1,0 +1,74 @@
+{
+  "name": "pequeno-mundo-da-giulia",
+  "productName": "Pequeno Mundo da Giulia",
+  "version": "1.1.0",
+  "private": true,
+  "description": "Um pequeno mundo de cores, sons e descobertas para brincar com o teclado.",
+  "author": "Família da Giulia",
+  "type": "module",
+  "main": "electron/bootstrap.cjs",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/mibess/pequeno-mundo-da-giulia.git"
+  },
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "dev:desktop": "node scripts/desktop-dev.mjs",
+    "preview:desktop": "npm run build && electron . --preview",
+    "start": "npm run build && electron .",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview --host 127.0.0.1",
+    "test": "node --test tests/*.test.cjs && playwright test",
+    "test:ui": "playwright test",
+    "test:desktop": "node --test tests/*.test.cjs",
+    "test:electron": "npm run build && node tests/electron-smoke.mjs",
+    "test:kiosk": "npm run build && node tests/electron-kiosk.mjs",
+    "icon": "node scripts/make-icon.mjs",
+    "organizar": "node scripts/organizar-versoes.mjs",
+    "update:prepare": "npm run build && node scripts/preparar-atualizacao.mjs",
+    "pack:web": "npm run build && node scripts/brincar-no-navegador.mjs",
+    "pack": "npm run build && electron-builder --mac --win --arm64 --x64 --publish never && node scripts/brincar-no-navegador.mjs && npm run organizar",
+    "pack:mac": "npm run build && electron-builder --mac --arm64 --x64 --publish never && npm run organizar",
+    "pack:win": "npm run build && electron-builder --win --arm64 --x64 --publish never && node scripts/brincar-no-navegador.mjs && npm run organizar",
+    "pack:win:assinado": "npm run build && electron-builder --win --arm64 --x64 --publish never -c.win.forceCodeSigning=true -c.win.signExecutable=true -c.win.signExts=.dll -c.win.signExts=.node && node scripts/brincar-no-navegador.mjs && npm run organizar"
+  },
+  "dependencies": {
+    "@fontsource/dm-sans": "^5.2.8",
+    "@fontsource/fraunces": "^5.2.7"
+  },
+  "devDependencies": {
+    "@electron/asar": "3.4.1",
+    "@playwright/test": "1.65.0",
+    "electron": "45.2.3",
+    "electron-builder": "26.18.0",
+    "typescript": "7.0.2",
+    "vite": "8.3.6"
+  },
+  "build": {
+    "appId": "com.giulia.pequenomundo",
+    "productName": "Pequeno Mundo da Giulia",
+    "directories": {
+      "output": "release/.preparo",
+      "buildResources": "build"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "package.json"
+    ],
+    "asar": true,
+    "mac": {
+      "category": "public.app-category.education",
+      "target": "zip",
+      "identity": "-",
+      "icon": "build/icon.icns",
+      "hardenedRuntime": false
+    },
+    "win": {
+      "target": "zip",
+      "signExecutable": false,
+      "icon": "build/icon.png"
+    },
+    "artifactName": "Giulia-${os}-${arch}-${version}.${ext}"
+  }
+}

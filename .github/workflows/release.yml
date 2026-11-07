@@ -1,0 +1,158 @@
+name: Publicar aplicativos e atualização
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publicar-pequeno-mundo
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Preparar ${{ matrix.target }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: mac
+            runner: macos-latest
+          - target: win
+            runner: windows-latest
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 35
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24.14.1'
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: npm run test:desktop
+      - name: Conferir assinatura e reproduzir o pacote assinado
+        if: matrix.target == 'mac'
+        run: node scripts/preparar-atualizacao.mjs --verify
+      - name: Gerar os aplicativos x64 e ARM64
+        env:
+          TARGET: ${{ matrix.target }}
+        run: |
+          npx --no-install electron-builder --"${TARGET}" --arm64 --x64 --publish never
+          version="$(node -p 'require("./package.json").version')"
+          mkdir -p pacotes
+          for arch in arm64 x64; do
+            cp "release/.preparo/Giulia-${TARGET}-${arch}-${version}.zip" pacotes/
+          done
+      - uses: actions/upload-artifact@v4
+        with:
+          name: aplicativos-${{ matrix.target }}
+          path: pacotes/*.zip
+          compression-level: 0
+          if-no-files-found: error
+          retention-days: 2
+
+  publish:
+    name: Publicar versão completa
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: aplicativos-*
+          merge-multiple: true
+          path: pacotes
+      - name: Conferir os seis arquivos e publicar o rascunho
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="$(jq -r .version package.json)"
+          tag="v${version}"
+          [[ "$tag" == "$GITHUB_REF_NAME" ]]
+          assets=("updates/$version/giulia-update.json" "updates/$version/giulia-app-$version.asar")
+          for os in mac win; do
+            for arch in arm64 x64; do
+              assets+=("pacotes/Giulia-$os-$arch-$version.zip")
+            done
+          done
+          for file in "${assets[@]}"; do test -s "$file"; done
+          state="$(gh release view "$tag" --json isDraft --jq '.isDraft' 2>/dev/null || true)"
+          if [[ -z "$state" ]]; then
+            gh release create "$tag" --verify-tag --draft --title "Pequeno Mundo da Giulia $version" --generate-notes
+          fi
+          if [[ "$state" != false ]]; then
+            gh release upload "$tag" "${assets[@]}" --clobber
+          fi
+          for file in "${assets[@]}"; do basename "$file"; done | sort > "$RUNNER_TEMP/esperados"
+          gh release view "$tag" --json assets --jq '.assets[] | select(.size > 0) | .name' | sort > "$RUNNER_TEMP/enviados"
+          diff "$RUNNER_TEMP/esperados" "$RUNNER_TEMP/enviados"
+          if [[ "$state" != false ]]; then
+            # A retried older build must not take the latest-release URL away from a newer version.
+            latest="$(gh release list --exclude-drafts --exclude-pre-releases --limit 100 --json isLatest,tagName --jq '.[] | select(.isLatest) | .tagName')"
+            newest="$(printf '%s\n' "${latest#v}" "$version" | sort -V | tail -1)"
+            if [[ "$newest" == "$version" ]]; then
+              gh release edit "$tag" --draft=false --latest
+            else
+              gh release edit "$tag" --draft=false --latest=false
+            fi
+          fi
+
+  test-upgrade:
+    name: Atualizar o aplicativo real no Windows x64
+    needs: publish
+    if: github.ref_name != 'v1.1.0'
+    runs-on: windows-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24.14.1'
+          cache: npm
+      - run: npm ci
+      - name: Baixar o aplicativo anterior e atualizar pela Área dos pais
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $version = (Get-Content package.json -Raw | ConvertFrom-Json).version
+          $releases = gh release list --exclude-drafts --exclude-pre-releases --limit 100 --json tagName,isLatest | ConvertFrom-Json
+          if ($LASTEXITCODE -ne 0) { throw 'Falha ao consultar publicações.' }
+          if (($releases | Where-Object isLatest).tagName -ne "v$version") {
+            Write-Host 'Esta edição foi arquivada. O feed já aponta para uma versão mais recente.'
+            exit 0
+          }
+          $older = $releases | Where-Object {
+            $_.tagName -match '^v\d+\.\d+\.\d+$' -and
+            [version]$_.tagName.Substring(1) -ge [version]'1.1.0' -and
+            [version]$_.tagName.Substring(1) -lt [version]$version
+          } | Sort-Object { [version]$_.tagName.Substring(1) } -Descending | Select-Object -First 1
+          if (!$older) { throw 'Nenhuma versão anterior com o atualizador foi encontrada.' }
+          $from = $older.tagName.Substring(1)
+          $zip = "Giulia-win-x64-$from.zip"
+          $folder = Join-Path $env:RUNNER_TEMP 'giulia-anterior'
+          gh release download $older.tagName --pattern $zip --dir $folder
+          if ($LASTEXITCODE -ne 0) { throw 'Falha ao baixar o aplicativo anterior.' }
+          Expand-Archive -Path (Join-Path $folder $zip) -DestinationPath (Join-Path $folder 'app')
+          $exe = Get-ChildItem (Join-Path $folder 'app') -Recurse -File -Filter 'Pequeno Mundo da Giulia.exe' | Select-Object -First 1
+          if (!$exe) { throw 'O ZIP não contém o aplicativo Windows.' }
+          node scripts/testar-atualizacao.mjs $exe.FullName $from $version

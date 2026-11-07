@@ -1,0 +1,13 @@
+node_modules/
+dist/
+release/
+ABRIR AQUI
+test-results/
+playwright-report/
+.DS_Store
+*.log
+.release-keys/
+.env
+.env.*
+*.pfx
+*.p12
